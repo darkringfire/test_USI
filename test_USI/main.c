@@ -24,10 +24,8 @@ void init() {
     _delay_ms(10);
     ST_DDR = 1<<ST;
     ST_PORT = 1<<ST;
-    _delay_ms(1);
+    //_delay_ms(1);
 
-	DDRB = 1<<4;
-	PORTB = 1<<4;
 	
 	/* Set baud rate */
 	UBRRH = (unsigned char)(baud>>8);
@@ -37,6 +35,9 @@ void init() {
 	UCSRB = (1<<RXEN)|(1<<TXEN);
 	/* Set frame format: 8data, 2stop bit */
 	UCSRC = (1<<USBS)|(3<<UCSZ0);
+
+	DDRB = 1<<4;
+	//PORTB = 1<<4;
 	
 	/* Wait for empty transmit buffer */
 	while ( !( UCSRA & (1<<UDRE)) ); UDR = 0x00;
@@ -61,7 +62,8 @@ int main(void) {
     USI_TWI_Master_Initialise();
     
     messageBuf[0] = I2C_ADDR;
-    USI_TWI_Start_Transceiver_With_Data(messageBuf, 1);
+    messageBuf[1] = 0xAA;
+    USI_TWI_Start_Transceiver_With_Data(messageBuf, 2);
     while (1) {
     }
 }
