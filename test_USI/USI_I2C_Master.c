@@ -11,7 +11,6 @@
 #include <util/delay.h>
 
 uint8_t USI_TWI_Master_Transfer( uint8_t temp );
-uint8_t USI_TWI_Master_Stop( void );
 
 union  USI_TWI_state
 {
@@ -143,7 +142,7 @@ uint8_t USI_TWI_Start_Transceiver_With_Data( uint8_t *msg, uint8_t msgSize)
                     USI_TWI_state.errorState = USI_TWI_NO_ACK_ON_DATA;
                 }          
                 DDRA &= ~(1<<1);
-                USI_TWI_Master_Stop();
+                //USI_TWI_Master_Stop();
                 return (FALSE);
             }
             DDRA &= ~(1<<1);
@@ -169,7 +168,7 @@ uint8_t USI_TWI_Start_Transceiver_With_Data( uint8_t *msg, uint8_t msgSize)
         }
     } while ( --msgSize) ;                             // Until all data sent/received.
     
-    USI_TWI_Master_Stop();                           // Send a STOP condition on the TWI bus.
+    //USI_TWI_Master_Stop();                           // Send a STOP condition on the TWI bus.
 
     /* Transmission successfully completed*/
     return (TRUE);

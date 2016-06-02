@@ -64,6 +64,9 @@ int main(void) {
     messageBuf[0] = I2C_ADDR;
     messageBuf[1] = 0xAA;
     USI_TWI_Start_Transceiver_With_Data(messageBuf, 2);
+    messageBuf[0] = I2C_ADDR | (1<<TWI_READ_BIT);
+    USI_TWI_Start_Transceiver_With_Data(messageBuf, 2);
+    USI_TWI_Master_Stop();
     while (1) {
     }
 }
