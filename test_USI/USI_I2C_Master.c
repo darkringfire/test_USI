@@ -7,6 +7,7 @@
 
 #include "USI_I2C_Master.h"
 #include <avr/io.h>
+#include <avr/cpufunc.h>
 #include <util/delay.h>
 
 uint8_t USI_TWI_Master_Transfer( uint8_t temp );
@@ -133,7 +134,9 @@ uint8_t USI_TWI_Start_Transceiver_With_Data( uint8_t *msg, uint8_t msgSize)
             /* Write a byte */
             PORT_USI &= ~(1<<PIN_USI_SCL);                // Pull SCL LOW.
             USIDR     = *(msg++);                        // Setup data.
+			while ( !( UCSRA & (1<<UDRE)) ); UDR = USIDR;
             USI_TWI_Master_Transfer( tempUSISR_8bit );    // Send 8 bits on bus.
+			while ( !( UCSRA & (1<<UDRE)) ); UDR = USIDR;
             
             /* Clock and verify (N)ACK from slave */
             //DDR_USI  &= ~(1<<PIN_USI_SDA);                // Enable SDA as input.
@@ -192,10 +195,10 @@ uint8_t USI_TWI_Master_Transfer( uint8_t temp )
   {
     _delay_us( T2_TWI/4 );              
     USICR = temp;                          // Generate positive SCL edge.
-    while( !(PIN_USI & (1<<PIN_USI_SCL)) );// Wait for SCL to go high.
+    while( ~PIN_USI & (1<<PIN_USI_SCL) ); // Wait for SCL to go high.
     _delay_us( T4_TWI/4 );              
     USICR = temp;                          // Generate negative SCL edge.
-  }while( !(USISR & (1<<USIOIF)) );        // Check for transfer complete.
+  } while( ~USISR & (1<<USIOIF) );        // Check for transfer complete.
   
   _delay_us( T2_TWI/4 );                
   temp  = USIDR;                           // Read out data.
