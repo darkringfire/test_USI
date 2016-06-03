@@ -55,7 +55,7 @@ void USI_TWI_Master_Initialise( void )
  Success or error code is returned. Error codes are defined in 
  USI_TWI_Master.h
 ---------------------------------------------------------------*/
-uint8_t USI_TWI_Start_Transceiver_With_Data( uint8_t *msg, uint8_t msgSize)
+uint8_t USI_TWI_Start_Transceiver_With_Data( uint8_t *msg, uint8_t txSize, uint8_t rxSize)
 {
     uint8_t tempUSISR_8bit = (1<<USISIF)|(1<<USIOIF)|(1<<USIPF)|(1<<USIDC)|      // Prepare register value to: Clear flags, and
                              (0x0<<USICNT0);                                     // set USI to shift 8 bits i.e. count 16 clock edges.
@@ -71,7 +71,7 @@ uint8_t USI_TWI_Start_Transceiver_With_Data( uint8_t *msg, uint8_t msgSize)
         USI_TWI_state.errorState = USI_TWI_DATA_OUT_OF_BOUND;
         return (FALSE);
     }
-    if(msgSize <= 1)                                 // Test if the transmission buffer is empty
+    if(txSize <= 1)                                 // Test if the transmission buffer is empty
     {
         USI_TWI_state.errorState = USI_TWI_NO_DATA;
         return (FALSE);
@@ -104,11 +104,11 @@ uint8_t USI_TWI_Start_Transceiver_With_Data( uint8_t *msg, uint8_t msgSize)
     /* Release SCL to ensure that (repeated) Start can be performed */
     PORT_USI |= (1<<PIN_USI_SCL);                     // Release SCL.
     while( !(PIN_USI & (1<<PIN_USI_SCL)) );          // Verify that SCL becomes high.
-    _delay_us( T_TWI/2 );
+    _delay_us( T1_TWI );
 
     /* Generate Start Condition */
     PORT_USI &= ~(1<<PIN_USI_SDA);                    // Force SDA LOW.
-    _delay_us( T_TWI/2 );
+    _delay_us( T_TWI );
     PORT_USI &= ~(1<<PIN_USI_SCL);                    // Pull SCL LOW.
     PORT_USI |= (1<<PIN_USI_SDA);                     // Release SDA.
 
@@ -121,54 +121,42 @@ uint8_t USI_TWI_Start_Transceiver_With_Data( uint8_t *msg, uint8_t msgSize)
     #endif
 
     /*Write address and Read/Write data */
-    do 
-    {
-        /* If masterWrite cycle (or initial address transmission)*/
-        if (USI_TWI_state.addressMode || USI_TWI_state.masterWriteDataMode)
-        {
-            /* Write a byte */
-            PORT_USI &= ~(1<<PIN_USI_SCL);                // Pull SCL LOW.
-            USIDR     = *(msg++);                        // Setup data.
-            USI_TWI_Master_Transfer( tempUSISR_8bit );    // Send 8 bits on bus.
+	while (txSize--) {
+        /* Write a byte */
+        PORT_USI &= ~(1<<PIN_USI_SCL);                // Pull SCL LOW.
+        USIDR     = *(msg++);                        // Setup data.
+        USI_TWI_Master_Transfer( tempUSISR_8bit );    // Send 8 bits on bus.
             
-            /* Clock and verify (N)ACK from slave */
-            DDR_USI  &= ~(1<<PIN_USI_SDA);                // Enable SDA as input.
-            DDRA |= (1<<1);
-            if( USI_TWI_Master_Transfer( tempUSISR_1bit ) & (1<<TWI_NACK_BIT) )
-            {
-                if ( USI_TWI_state.addressMode ) {
-                    USI_TWI_state.errorState = USI_TWI_NO_ACK_ON_ADDRESS;
-                } else {
-                    USI_TWI_state.errorState = USI_TWI_NO_ACK_ON_DATA;
-                }          
-                DDRA &= ~(1<<1);
-                //USI_TWI_Master_Stop();
-                return (FALSE);
-            }
-            DDRA &= ~(1<<1);
-            USI_TWI_state.addressMode = FALSE;            // Only perform address transmission once.
+        /* Clock and verify (N)ACK from slave */
+        DDR_USI  &= ~(1<<PIN_USI_SDA);                // Enable SDA as input.
+        if( USI_TWI_Master_Transfer( tempUSISR_1bit ) & (1<<TWI_NACK_BIT) )
+        {
+	        if ( USI_TWI_state.addressMode ) {
+		        USI_TWI_state.errorState = USI_TWI_NO_ACK_ON_ADDRESS;
+		        } else {
+		        USI_TWI_state.errorState = USI_TWI_NO_ACK_ON_DATA;
+	        }
+	        return (FALSE);
         }
-        /* Else masterRead cycle*/
+        USI_TWI_state.addressMode = FALSE;            // Only perform address transmission once.
+	}
+	while (rxSize--) {
+        /* Read a data byte */
+        DDR_USI   &= ~(1<<PIN_USI_SDA);               // Enable SDA as input.
+        *(msg++)  = USI_TWI_Master_Transfer( tempUSISR_8bit );
+
+        /* Prepare to generate ACK (or NACK in case of End Of Transmission) */
+        if( rxSize == 0)                            // If transmission of last byte was performed.
+        {
+	        USIDR = 0xFF;                              // Load NACK to confirm End Of Transmission.
+        }
         else
         {
-            /* Read a data byte */
-            DDR_USI   &= ~(1<<PIN_USI_SDA);               // Enable SDA as input.
-            *(msg++)  = USI_TWI_Master_Transfer( tempUSISR_8bit );
-
-            /* Prepare to generate ACK (or NACK in case of End Of Transmission) */
-            if( msgSize == 1)                            // If transmission of last byte was performed.
-            {
-                USIDR = 0xFF;                              // Load NACK to confirm End Of Transmission.
-            }
-            else
-            {
-                USIDR = 0x00;                              // Load ACK. Set data register bit 7 (output for SDA) low.
-            }
-            USI_TWI_Master_Transfer( tempUSISR_1bit );   // Generate ACK/NACK.
+	        USIDR = 0x00;                              // Load ACK. Set data register bit 7 (output for SDA) low.
         }
-    } while ( --msgSize) ;                             // Until all data sent/received.
-    
-    //USI_TWI_Master_Stop();                           // Send a STOP condition on the TWI bus.
+        USI_TWI_Master_Transfer( tempUSISR_1bit );   // Generate ACK/NACK.
+	}
+	
 
     /* Transmission successfully completed*/
     return (TRUE);
@@ -190,16 +178,16 @@ uint8_t USI_TWI_Master_Transfer( uint8_t temp )
   do
   {
     //_delay_us( T2_TWI/4 );              
-    _delay_us( T_TWI/2 );
+    _delay_us( T2_TWI );
     USICR = temp;                          // Generate positive SCL edge.
     while( ~PIN_USI & (1<<PIN_USI_SCL) ); // Wait for SCL to go high.
     //_delay_us( T4_TWI/4 );              
-    _delay_us( T_TWI/2 );
+    _delay_us( T1_TWI );
     USICR = temp;                          // Generate negative SCL edge.
   } while( ~USISR & (1<<USIOIF) );        // Check for transfer complete.
   
   //_delay_us( T2_TWI/4 );                
-  _delay_us( T_TWI/2 );
+  _delay_us( T1_TWI );
   temp  = USIDR;                           // Read out data.
   USIDR = 0xFF;                            // Release SDA.
   DDR_USI |= (1<<PIN_USI_SDA);             // Enable SDA as output.
@@ -216,11 +204,10 @@ uint8_t USI_TWI_Master_Stop( void )
   PORT_USI &= ~(1<<PIN_USI_SDA);           // Pull SDA low.
   PORT_USI |= (1<<PIN_USI_SCL);            // Release SCL.
   while( !(PIN_USI & (1<<PIN_USI_SCL)) );  // Wait for SCL to go high.
-  //_delay_us( T4_TWI/4 );               
-  _delay_us( T_TWI/2 );
+  _delay_us( T2_TWI );
   PORT_USI |= (1<<PIN_USI_SDA);            // Release SDA.
   //_delay_us( T2_TWI/4 );                
-  _delay_us( T_TWI/2 );
+  _delay_us( T_TWI );
   
 #ifdef SIGNAL_VERIFY
   if( !(USISR & (1<<USIPF)) )

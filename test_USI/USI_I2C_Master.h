@@ -10,9 +10,11 @@
 #define USI_I2C_MASTER_H_
 
 #define TWI_FAST_MODE
-#define TWI_CLK     100.0  // [kbit/s]
+#define TWI_CLK     60.0  // [kbit/s]
 
 #define T_TWI       ( 1000.0 / TWI_CLK )
+#define T1_TWI      ( T_TWI / 3 )
+#define T2_TWI      ( T_TWI * 2 / 3 )
 
 //#ifdef TWI_FAST_MODE               // TWI FAST mode timing limits. SCL = 100-400kHz
   //#define T2_TWI    ((SYS_CLK *1300) /1000000) +1 // >1,3us
@@ -93,7 +95,7 @@
 //********** Prototypes **********//
 
 void USI_TWI_Master_Initialise( void );
-uint8_t USI_TWI_Start_Transceiver_With_Data( uint8_t *msg, uint8_t msgSize);
+uint8_t USI_TWI_Start_Transceiver_With_Data( uint8_t *msg, uint8_t txSize, uint8_t rxSize);
 uint8_t USI_TWI_Master_Stop( void );
 
 
